@@ -51,6 +51,13 @@ sub add_node {
     $self->_nodes->{$node->{domain}} = GreeHost::MeshNet::Network::Node->new( $node );
 }
 
+# Get all node objects
+sub nodes {
+    my ( $self ) = @_;
+
+    return values %{$self->_nodes};
+}
+
 sub install_nebula {
     return unless ! -d 'bin';
 

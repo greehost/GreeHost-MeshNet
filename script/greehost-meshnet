@@ -4,6 +4,113 @@ use strict;
 use GreeHost::MeshNet;
 use Getopt::Long;
 use Pod::Usage;
+use JSONY;
+use File::Slurper qw( read_text );
+use GreeHost::MeshNet;
 
+# Helper Functions
+sub verbose {
+    my ( $message ) = @_;
+    print "[*] $message\n";
+}
 
+sub verify_config {
+    my ( $config ) = @_;
+
+    if ( ! exists $config->{network} ) {
+        pod2usage( -exitval  => 255, -sections => 'NETWORK CONFIG FILE', -verbose  => 99,
+            -message => 'Invalid configuation, no network found.'
+        );
+    } elsif ( ! exists $config->{network}{name} ) {
+        pod2usage( -exitval  => 255, -sections => 'NETWORK CONFIG FILE', -verbose  => 99,
+            -message => 'The network name must be defined.'
+        );
+    } elsif ( ! exists $config->{nodes} ) {
+        pod2usage( -exitval  => 255, -sections => 'NETWORK CONFIG FILE', -verbose  => 99,
+            -message => 'Nodes must be defined and include at least one node.'
+        );
+    } elsif ( ! @{$config->{nodes}} >= 1 ) {
+        pod2usage( -exitval  => 255, -sections => 'NETWORK CONFIG FILE', -verbose  => 99,
+            -message => 'At least one node must be defined.'
+        );
+    }
+
+    return $config;
+}
+
+# Main Program
+
+my $opts = {
+    config   => 'network.conf',
+    init     => 0,
+    generate => 0,
+    deploy   => 0,
+    verbose  => 0,
+    help     => 0,
+};
+
+GetOptions( $opts,
+    'config=s',
+    'help!',
+    'init!',
+    'generate!',
+    'deploy!',
+    'verbose!',
+);
+
+if ( $opts->{help} == 1 ) {
+    pod2usage( 
+        -exitval  => 0,
+        -sections => 'DESCRIPTION|ARGUMENTS',
+        -verbose  => 99,
+    );
+}
+    
+my $config = verify_config(JSONY->new->load( read_text( $opts->{config} ) ));
+
+# Main Program
+
+if ( $opts->{init} ) {
+    verbose "Installing Nebula.";
+    $network->install_nebula;
+    verbose "Creating Nebula CA.";
+    $network->install_nebula_cert_authority;
+}
+
+if ( $opts->{generate} ) {
+    verbose "Generating certificates and configuration.";
+    foreach my $node ( $network->nodes ) {
+        verbose "Creating configuration for $node";
+        $node->generate_nebula_config;
+        $node->generate_nebula_certs;
+    }
+}
+
+if ( $opts->{deploy} ) {
+    verbose "Deploying certifcates and configuration.";
+    foreach my $node ( $network->nodes ) {
+        verbose "Deploying certs & config for " . $node->domain;
+        if ( $node->deploy_address ) {
+            $node->deploy;
+        }
+    }
+}
+
+# Docs
+=head1 NAME
+
+=head1 DESCRIPTION
+
+    greehost-meshnet creates and deploys a Nebula overlay network based on a configuration file.
+
+=head1 ARGUMENTS
+
+    -c --config         Location for config file; default ./greehost.conf
+    -i --init           Initialize current directory with Nebula & create the CA
+    -g --generate       Generate all certificates and configuration files for network
+    -d --deploy         Install Nebula on deployable hosts, and configure.
+
+=head1 NETWORK CONFIG FILE
+
+    The config file is a JSONy document that looks like the following:
 
