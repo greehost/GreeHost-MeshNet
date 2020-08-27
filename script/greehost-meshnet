@@ -41,20 +41,24 @@ sub verify_config {
 # Main Program
 
 my $opts = {
-    config   => 'network.conf',
-    init     => 0,
-    generate => 0,
-    deploy   => 0,
-    verbose  => 0,
-    help     => 0,
+    config      => 'network.conf',
+    init        => 0,
+    remote_init => 0,
+    generate    => 0,
+    deploy      => 0,
+    verbose     => 0,
+    name        => [ ],
+    help        => 0,
 };
 
 GetOptions( $opts,
     'config=s',
     'help!',
     'init!',
+    'remote_init!',
     'generate!',
     'deploy!',
+    'name=s@',
     'verbose!',
 );
 
@@ -67,6 +71,7 @@ if ( $opts->{help} == 1 ) {
 }
     
 my $config = verify_config(JSONY->new->load( read_text( $opts->{config} ) ));
+my $network = GreeHost::MeshNet->new_from_config($config);
 
 # Main Program
 
@@ -86,9 +91,26 @@ if ( $opts->{generate} ) {
     }
 }
 
+if ( $opts->{remote_init} ) {
+    verbose "Initalizing Remote Machines";
+    foreach my $node ( $network->nodes ) {
+        if ( @{$opts->{name}} >= 1 ) {
+            next unless grep { $node->domain eq $_ } @{$opts->{name}};
+        }
+        verbose "Initalizing " . $node->domain;
+        if ( $node->deploy_address ) {
+            $node->remote_init;
+        }
+    }
+}
+
+
 if ( $opts->{deploy} ) {
     verbose "Deploying certifcates and configuration.";
     foreach my $node ( $network->nodes ) {
+        if ( @{$opts->{name}} >= 1 ) {
+            next unless grep { $node->domain eq $_ } @{$opts->{name}};
+        }
         verbose "Deploying certs & config for " . $node->domain;
         if ( $node->deploy_address ) {
             $node->deploy;
@@ -109,8 +131,38 @@ if ( $opts->{deploy} ) {
     -i --init           Initialize current directory with Nebula & create the CA
     -g --generate       Generate all certificates and configuration files for network
     -d --deploy         Install Nebula on deployable hosts, and configure.
+    -r --remote_init    Execute the remote init code for each deployable host.
+    -n --name           Apply the action ONLY to the hosts by name of domain.
+                          Multiple --name arguments may be used
 
 =head1 NETWORK CONFIG FILE
 
     The config file is a JSONy document that looks like the following:
+
+    {
+    network { name "GreeHost Network" }
+    nodes [
+    {
+        domain         mn.greehost.com
+        address        192.168.18.1
+        deploy_address root@104.237.159.204
+        is_lighthouse  1
+        public_address 104.237.159.204
+    } {
+        domain         control.mn.greehost.com
+        address        192.168.18.10
+        deploy_address root@192.168.87.17
+        is_lighthouse  0
+    }{
+        domain         build01.mn.greehost.com
+        address        192.168.18.11
+        deploy_address root@192.168.87.16
+        is_lighthouse  0
+    } {
+        domain         sslstore.mn.greehost.com
+        address        192.168.18.151
+        deploy_address root@192.168.87.18
+        is_lighthouse  0
+    }
+    ]}
 

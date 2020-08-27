@@ -1,0 +1,5 @@
+- [ ] Move ssh options to the network.conf file
+- [ ] Move the remote_init script to the network.conf file
+- [ ] Move anything else that makes sense to the config file
+- [ ] Maybe JSONY isn't the right config for the network?  Maybe it is.
+- [ ] Make it so that each node can have its own remote script so that the MeshNet node can be set up even easier. 

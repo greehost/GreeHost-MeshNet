@@ -26,6 +26,35 @@ has is_lighthouse => (
     is => 'ro',
 );
 
+has remote_init_ssh_opts => (
+    is      => 'ro',
+    default => sub { 
+        return [ '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null' ];
+    },
+);
+
+has remote_init_commands => (
+    is => 'ro',
+    lazy => 1,
+    builder => sub {
+        my ( $self ) = @_;
+        return [
+            [ 'local',
+                ['scp', @{$self->remote_init_ssh_opts}, 'GreeHost-MeshNet-0.001.tar.gz', $self->deploy_address . ":" ],
+            ], [ 'remote',
+                [qw(hostnamectl set-hostname), $self->domain],
+                [qw(yum -y install epel-release)],
+                [qw(yum -y update)],
+                [qw(yum -y upgrade)],
+                [qw(yum install -y yum-utils perl-App-cpanminus perl-core rsync)],
+                [qw(yum groupinstall -y), "Development Tools"],
+                [qw(cpanm install GreeHost-MeshNet-0.001.tar.gz)],
+                [qw(mkdir /etc/nebula)],
+            ],
+        ];
+    },
+);
+
 # For lighthouses, their public IPs/domains are required
 # TODO: ensure that when is_lighthouse is true, public_address exists.
 has public_address => (
@@ -157,12 +186,30 @@ sub generate_nebula_certs {
 sub deploy {
     my ( $self ) = @_;
 
-    # Move the files over....
-    run3([ 'rsync', $self->nebula_ca_cert, $self->deploy_address . ":/etc/nebula/ca.crt" ] );
-    run3([ 'rsync', $self->nebula_config, $self->deploy_address . ":/etc/nebula/nebula.conf" ] );
-    run3([ 'rsync', $self->domain_cert, $self->deploy_address . ":/etc/nebula/" ] );
-    run3([ 'rsync', $self->domain_key, $self->deploy_address . ":/etc/nebula/" ] );
 
+    # Move the files over....
+    my $ssh_cmd = join( " ", "ssh", @{$self->remote_init_ssh_opts} );
+    run3([ 'rsync', '-e', $ssh_cmd, $self->nebula_ca_cert, $self->deploy_address . ":/etc/nebula/ca.crt" ] );
+    run3([ 'rsync', '-e', $ssh_cmd, $self->nebula_config, $self->deploy_address . ":/etc/nebula/config.yml" ] );
+    run3([ 'rsync', '-e', $ssh_cmd, $self->domain_cert, $self->deploy_address . ":/etc/nebula/" ] );
+    run3([ 'rsync', '-e', $ssh_cmd, $self->domain_key, $self->deploy_address . ":/etc/nebula/" ] );
+    
+    my $conn = Object::Remote->connect( $self->deploy_address, ssh_options => $self->remote_init_ssh_opts );
+    GreeHost::MeshNet::RPC->can::on( $conn, 'install_nebula' )->();
+    GreeHost::MeshNet::RPC->can::on( $conn, 'start_and_enable_nebula_service' )->();
+
+}
+
+sub remote_init {
+    my ( $self ) = @_;
+
+    for my $block ( @{$self->remote_init_commands} ) {
+        my $mode = shift @{$block};
+
+        foreach my $command ( @{$block} ) {
+            run3([($mode eq 'remote' ? ( 'ssh', @{$self->remote_init_ssh_opts}, $self->deploy_address ) : () ), @{$command}]);
+        }
+    }
 }
 
 
