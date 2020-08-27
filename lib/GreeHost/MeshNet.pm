@@ -7,7 +7,7 @@ sub new_from_config {
     my ( $class, $config ) = @_;
 
     my $network = GreeHost::MeshNet->new(
-        network => GreeHost::MeshNet::Network->new(%{$config->{network}}),
+        network => GreeHost::MeshNet::Network->new(%{$config->{config}}),
     );
 
     foreach my $node ( @{$config->{nodes}} ) {

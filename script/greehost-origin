@@ -4,59 +4,21 @@ use strict;
 use Storable qw( dclone );
 use JSON::MaybeXS qw( encode_json );
 
-sub get_inline_files {
-    my $inline_files = {};
-    my $file;
-    while ( my $line = <DATA> ) {
-        if ( $line =~ /^===||| BEGIN (\S+) |||===$/ ) {
-            $file = $1;
-        } else {
-            die "Error: ===||| BEGIN file_name |||=== MUST be the first line in __DATA__"
-                unless $file;
-            $inline_files->{$file} .= $line;
-        }
-    }
-    return $inline_files;
-}
-
-sub merge_scripts {
-    my ( $network ) = @_;
-
-    foreach my $node ( @{$network->{nodes}} ) {
-
-        # Each node may have its own remote_init_script, if it
-        # does not have one, it will be populated based on the
-        # network configured one.
-        if ( ! $node->{remote_init_script} ) {
-            # [ [ 'marker', @cmds ], [ 'marker', @cmds  ] ]
-            my $network_scripts = dclone $network->{config}{remote_init_script};
-            my @scripts = @{$network_scripts};
-            foreach my $script ( @scripts ) {
-                my $mode = shift @{$script};
-                my @new_cmd;
-                foreach my $command ( @{$script} ) {
-                    push @new_cmd, [ map { template_render( $_, 
-                        { 
-                            %{$node}, 
-                            %{get_inline_files()}, 
-                            ssh_opts => join(" ", @{$network->{config}->{ssh_opts}}),
-                        }
-                    )} @{$command} ];
-                }
-                push @{$node->{remote_init_script}}, [ $mode, @new_cmd ];
-            }
-        }
-    }
-    return $network;
-}
-
+my @ssh_opts = ( '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null' );
 my $network = {
     config => {
         name               => 'GreeHost Network',
-        ssh_opts           => [ '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null' ],
+        ssh_opts           => [ @ssh_opts ],
+        post_deploy_script => [
+            [ 'remote',
+                [qw(service firewalld stop)],
+                [qw(service nebula restart)],
+                [qw(service sshd restart)],
+            ],
+        ],
         remote_init_script => [
             [ 'local',
-                ['scp', '[% ssh_opts %]', 'GreeHost-MeshNet-0.001.tar.gz', '[% deploy_address %]' . ":" ],
+                ['scp', @ssh_opts, 'GreeHost-MeshNet-0.001.tar.gz', '[% deploy_address %]' . ":" ],
             ], [ 'remote',
                 [qw(hostnamectl set-hostname), '[% domain %]' ],
                 [qw(yum -y install epel-release)],
@@ -65,14 +27,14 @@ my $network = {
                 [qw(yum install -y yum-utils perl-App-cpanminus perl-core rsync)],
                 [qw(yum groupinstall -y), "Development Tools"],
                 [qw(cpanm install GreeHost-MeshNet-0.001.tar.gz)],
-                [qw(mkdir /etc/nebula)],
+                [qw(mkdir /etc/nebula )],
             ],
         ],
     },
     nodes => [
         {
             domain         => "mn.greehost.com",
-            address        => "192.168.18.",
+            address        => "192.168.18.1",
             deploy_address => 'root@104.237.159.204',
             is_lighthouse  => "1",
             public_address => "104.237.159.204",
@@ -120,21 +82,110 @@ my $network = {
     ],
 };
 
-# use Data::Dumper;
-# print Dumper merge_scripts( $network );
+# There is no more configuration past this line, only code.
 
-open my $of, ">", 'greehost-network.json'
-    or die "Failed to open greehost-network.json file: $!";
-print $of encode_json( merge_scripts($network) );
-close $of;
+sub get_inline_files {
+    my $inline_files = {};
+    my $file;
+    while ( my $line = <DATA> ) {
+        if ( $line =~ /^===||| BEGIN (\S+) |||===$/ ) {
+            $file = $1;
+        } else {
+            die "Error: ===||| BEGIN file_name |||=== MUST be the first line in __DATA__"
+                unless $file;
+            $inline_files->{$file} .= $line;
+        }
+    }
+    return $inline_files;
+}
 
+sub process_network_config {
+    my ( $network ) = @_;
+
+    foreach my $node ( @{$network->{nodes}} ) {
+
+        # Each node may have its own remote_init_script, if it
+        # does not have one, it will be populated based on the
+        # network configured one.
+        if ( ! $node->{remote_init_script} ) {
+            # [ [ 'marker', @cmds ], [ 'marker', @cmds  ] ]
+            my $network_scripts = dclone $network->{config}{remote_init_script};
+            my @scripts = @{$network_scripts};
+            foreach my $script ( @scripts ) {
+                my $mode = shift @{$script};
+                my @new_cmd;
+                foreach my $command ( @{$script} ) {
+                    push @new_cmd, [ map { template_render( $_, 
+                        { 
+                            %{$node}, 
+                            %{get_inline_files()}, 
+                            ssh_opts => join(" ", @{$network->{config}->{ssh_opts}}),
+                        }
+                    )} @{$command} ];
+                }
+                push @{$node->{remote_init_commands}}, [ $mode, @new_cmd ];
+            }
+        }
+
+        # The same... again... consolidate next time.
+        if ( ! $node->{post_deploy_script} ) {
+            # [ [ 'marker', @cmds ], [ 'marker', @cmds  ] ]
+            my $network_scripts = dclone $network->{config}{post_deploy_script};
+            my @scripts = @{$network_scripts};
+            foreach my $script ( @scripts ) {
+                my $mode = shift @{$script};
+                my @new_cmd;
+                foreach my $command ( @{$script} ) {
+                    push @new_cmd, [ map { template_render( $_, 
+                        { 
+                            %{$node}, 
+                            %{get_inline_files()}, 
+                            ssh_opts => join(" ", @{$network->{config}->{ssh_opts}}),
+                        }
+                    )} @{$command} ];
+                }
+                push @{$node->{post_deploy_script}}, [ $mode, @new_cmd ];
+            }
+        }
+    }
+    return $network;
+}
+
+while ( my $opt = shift @ARGV ) {
+    if ( $opt =~ /^write-config$/ ) {
+        open my $sf, ">", "greehost-network.json"
+            or die "Failed to write greehost-network.json: $!";
+        print $sf encode_json( process_network_config( $network ) );
+        close $sf;
+        print "Wrote greehost-network.json\n";
+    } elsif ( $opt =~ /^init-system$/ ) {
+        my $hostname = shift @ARGV;
+        die "Error: init-system requires a hostname argument."
+            unless $hostname;
+        system( "hostnamectl set-hostname $hostname" );
+        system( "yum -y install epel-release" );
+        system( "yum -y update" );
+        system( "yum -y upgrade" );
+        system( "yum install -y yum-utils perl-App-cpanminus perl-core rsync" );
+        system( "yum groupinstall -y \"Development Tools\"" );
+        system( "mkdir -p /opt/greehost/meshnet" );
+        system( "rpm -Uvh https://yum.puppetlabs.com/puppet5/puppet5-release-el-7.noarch.rpm" );
+        system( "yum install -y puppet-agent pdk puppet-bolt" );
+        system( "rm -fr /etc/puppetlabs/code/" );
+        system( 'git clone git@simcop2387.info:symkat/GreeHost-Puppet.git /etc/puppetlabs/code/' );
+        chdir '/opt/greehost/meshnet';
+        print "\nInitalized system: please go to /opt/greehost/meshnet.\n";
+        print "  -- Time to run config and then switch to greehost-meshnet from here.\n";
+    } else {
+        print "Unknown request: $opt\n";
+    }
+}
 
 =head2 template_render( $template, $config )
 
-[% KEY %] will be replaced with the value of
-the key, as given in the argument.
+  [% KEY %] will be replaced with the value of the key, as given in the argument.
 
-Simple non-nested if statements may be used.
+  Simple non-nested if statements may be used.
 
     [% IF NAME %]Hello, [% NAME %][% ENDIF %]
     [% IF USER %]
@@ -142,17 +193,15 @@ Simple non-nested if statements may be used.
         Welcome to the jungle!
     [% ENDIF %]
 
-Tokens that are not recognized will be removed,
-if statements that do not match will not leave
-behind new lines.
+  Tokens that are not recognized will be removed, if statements that do not match will not leave behind new lines.
 
-my $content = $file->template_slurp(
-    {
-        ACCOUNT => 102044,
-        NAME    => "The Doctor",
-        BALANCE => "$105.99",
-    }
-);
+    my $content = $file->template_slurp(
+        {
+            ACCOUNT => 102044,
+            NAME    => "The Doctor",
+            BALANCE => "$105.99",
+        }
+    );
 
 =cut
 
@@ -219,7 +268,6 @@ sub parser_error {
 
 __DATA__
 ===||| BEGIN remote_init |||===
-
 
 ===||| BEGIN control_script |||===
 

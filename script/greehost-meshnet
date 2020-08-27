@@ -7,6 +7,7 @@ use Pod::Usage;
 use JSONY;
 use File::Slurper qw( read_text );
 use GreeHost::MeshNet;
+use JSON::MaybeXS qw( decode_json );
 
 # Helper Functions
 sub verbose {
@@ -17,11 +18,11 @@ sub verbose {
 sub verify_config {
     my ( $config ) = @_;
 
-    if ( ! exists $config->{network} ) {
+    if ( ! exists $config->{config} ) {
         pod2usage( -exitval  => 255, -sections => 'NETWORK CONFIG FILE', -verbose  => 99,
-            -message => 'Invalid configuation, no network found.'
+            -message => 'Invalid configuation, no network config found.'
         );
-    } elsif ( ! exists $config->{network}{name} ) {
+    } elsif ( ! exists $config->{config}{name} ) {
         pod2usage( -exitval  => 255, -sections => 'NETWORK CONFIG FILE', -verbose  => 99,
             -message => 'The network name must be defined.'
         );
@@ -41,7 +42,7 @@ sub verify_config {
 # Main Program
 
 my $opts = {
-    config      => 'network.conf',
+    config      => 'greehost-network.json',
     init        => 0,
     remote_init => 0,
     generate    => 0,
@@ -70,18 +71,10 @@ if ( $opts->{help} == 1 ) {
     );
 }
     
-my $config = verify_config(JSONY->new->load( read_text( $opts->{config} ) ));
+my $config = verify_config(decode_json( read_text( $opts->{config} ) ));
 my $network = GreeHost::MeshNet->new_from_config($config);
 
 # Main Program
-my $DEBUG = 1;
-if ( $DEBUG ) {
-    foreach my $node ( $network->nodes ) {
-        verbose "Creating configuration for " . $node->domain;
-        use Data::Dumper;
-        print Dumper $node;
-    }
-}
 
 if ( $opts->{init} ) {
     verbose "Installing Nebula.";
@@ -93,7 +86,7 @@ if ( $opts->{init} ) {
 if ( $opts->{generate} ) {
     verbose "Generating certificates and configuration.";
     foreach my $node ( $network->nodes ) {
-        verbose "Creating configuration for $node";
+        verbose "Creating configuration for " . $node->domain;
         $node->generate_nebula_config;
         $node->generate_nebula_certs;
     }

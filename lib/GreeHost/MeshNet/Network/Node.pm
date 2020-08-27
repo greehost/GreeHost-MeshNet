@@ -26,7 +26,7 @@ has is_lighthouse => (
     is => 'ro',
 );
 
-has remote_init_ssh_opts => (
+has ssh_opts => (
     is      => 'ro',
     default => sub { 
         return [ '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null' ];
@@ -34,6 +34,11 @@ has remote_init_ssh_opts => (
 );
 
 has remote_init_commands => (
+    is      => 'ro',
+    default => sub { [  ] },
+);
+
+has post_deploy_script => (
     is      => 'ro',
     default => sub { [  ] },
 );
@@ -119,7 +124,7 @@ sub generate_nebula_config {
     my ( $self ) = @_;
 
     open my $sf, ">", $self->nebula_config
-        or die "Failed to open $self->nebula_config for writing: $!";
+        or die "Failed to open " . $self->nebula_config . " for writing: $!";
     print $sf Text::Xslate->new( syntax => 'Metakolon' )
         ->render_string( $default_nebula_config, { node => $self } );
     close $sf;
@@ -171,15 +176,24 @@ sub deploy {
 
 
     # Move the files over....
-    my $ssh_cmd = join( " ", "ssh", @{$self->remote_init_ssh_opts} );
+    my $ssh_cmd = join( " ", "ssh", @{$self->ssh_opts} );
     run3([ 'rsync', '-e', $ssh_cmd, $self->nebula_ca_cert, $self->deploy_address . ":/etc/nebula/ca.crt" ] );
     run3([ 'rsync', '-e', $ssh_cmd, $self->nebula_config, $self->deploy_address . ":/etc/nebula/config.yml" ] );
     run3([ 'rsync', '-e', $ssh_cmd, $self->domain_cert, $self->deploy_address . ":/etc/nebula/" ] );
     run3([ 'rsync', '-e', $ssh_cmd, $self->domain_key, $self->deploy_address . ":/etc/nebula/" ] );
     
-    my $conn = Object::Remote->connect( $self->deploy_address, ssh_options => $self->remote_init_ssh_opts );
+    my $conn = Object::Remote->connect( $self->deploy_address, ssh_options => $self->ssh_opts );
     GreeHost::MeshNet::RPC->can::on( $conn, 'install_nebula' )->();
     GreeHost::MeshNet::RPC->can::on( $conn, 'start_and_enable_nebula_service' )->();
+    
+    # Code taken from remote_init, consolidate next time.
+    for my $block ( @{$self->post_deploy_script} ) {
+        my $mode = shift @{$block};
+
+        foreach my $command ( @{$block} ) {
+            run3([($mode eq 'remote' ? ( 'ssh', @{$self->ssh_opts}, $self->deploy_address ) : () ), @{$command}]);
+        }
+    }
 
 }
 
@@ -190,7 +204,7 @@ sub remote_init {
         my $mode = shift @{$block};
 
         foreach my $command ( @{$block} ) {
-            run3([($mode eq 'remote' ? ( 'ssh', @{$self->remote_init_ssh_opts}, $self->deploy_address ) : () ), @{$command}]);
+            run3([($mode eq 'remote' ? ( 'ssh', @{$self->ssh_opts}, $self->deploy_address ) : () ), @{$command}]);
         }
     }
 }
