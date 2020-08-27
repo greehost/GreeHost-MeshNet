@@ -34,25 +34,8 @@ has remote_init_ssh_opts => (
 );
 
 has remote_init_commands => (
-    is => 'ro',
-    lazy => 1,
-    builder => sub {
-        my ( $self ) = @_;
-        return [
-            [ 'local',
-                ['scp', @{$self->remote_init_ssh_opts}, 'GreeHost-MeshNet-0.001.tar.gz', $self->deploy_address . ":" ],
-            ], [ 'remote',
-                [qw(hostnamectl set-hostname), $self->domain],
-                [qw(yum -y install epel-release)],
-                [qw(yum -y update)],
-                [qw(yum -y upgrade)],
-                [qw(yum install -y yum-utils perl-App-cpanminus perl-core rsync)],
-                [qw(yum groupinstall -y), "Development Tools"],
-                [qw(cpanm install GreeHost-MeshNet-0.001.tar.gz)],
-                [qw(mkdir /etc/nebula)],
-            ],
-        ];
-    },
+    is      => 'ro',
+    default => sub { [  ] },
 );
 
 # For lighthouses, their public IPs/domains are required
