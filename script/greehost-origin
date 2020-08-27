@@ -1,0 +1,226 @@
+#!/usr/bin/env perl
+use warnings;
+use strict;
+use Storable qw( dclone );
+use JSON::MaybeXS qw( encode_json );
+
+sub get_inline_files {
+    my $inline_files = {};
+    my $file;
+    while ( my $line = <DATA> ) {
+        if ( $line =~ /^===||| BEGIN (\S+) |||===$/ ) {
+            $file = $1;
+        } else {
+            die "Error: ===||| BEGIN file_name |||=== MUST be the first line in __DATA__"
+                unless $file;
+            $inline_files->{$file} .= $line;
+        }
+    }
+    return $inline_files;
+}
+
+sub merge_scripts {
+    my ( $network ) = @_;
+
+    foreach my $node ( @{$network->{nodes}} ) {
+
+        # Each node may have its own remote_init_script, if it
+        # does not have one, it will be populated based on the
+        # network configured one.
+        if ( ! $node->{remote_init_script} ) {
+            # [ [ 'marker', @cmds ], [ 'marker', @cmds  ] ]
+            my $network_scripts = dclone $network->{config}{remote_init_script};
+            my @scripts = @{$network_scripts};
+            foreach my $script ( @scripts ) {
+                my $mode = shift @{$script};
+                my @new_cmd;
+                foreach my $command ( @{$script} ) {
+                    push @new_cmd, [ map { template_render( $_, 
+                        { 
+                            %{$node}, 
+                            %{get_inline_files()}, 
+                            ssh_opts => join(" ", @{$network->{config}->{ssh_opts}}),
+                        }
+                    )} @{$command} ];
+                }
+                push @{$node->{remote_init_script}}, [ $mode, @new_cmd ];
+            }
+        }
+    }
+    return $network;
+}
+
+my $network = {
+    config => {
+        name               => 'GreeHost Network',
+        ssh_opts           => [ '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null' ],
+        remote_init_script => [
+            [ 'local',
+                ['scp', '[% ssh_opts %]', 'GreeHost-MeshNet-0.001.tar.gz', '[% deploy_address %]' . ":" ],
+            ], [ 'remote',
+                [qw(hostnamectl set-hostname), '[% domain %]' ],
+                [qw(yum -y install epel-release)],
+                [qw(yum -y update)],
+                [qw(yum -y upgrade)],
+                [qw(yum install -y yum-utils perl-App-cpanminus perl-core rsync)],
+                [qw(yum groupinstall -y), "Development Tools"],
+                [qw(cpanm install GreeHost-MeshNet-0.001.tar.gz)],
+                [qw(mkdir /etc/nebula)],
+            ],
+        ],
+    },
+    nodes => [
+        {
+            domain         => "mn.greehost.com",
+            address        => "192.168.18.",
+            deploy_address => 'root@104.237.159.204',
+            is_lighthouse  => "1",
+            public_address => "104.237.159.204",
+        }, {
+            domain         => "manager.mn.greehost.com",
+            address        => "192.168.18.4",
+            deploy_address => 'root@192.168.87.19',
+            is_lighthouse  => "0",
+        }, {
+            domain         => "control.mn.greehost.com",
+            address        => "192.168.18.5",
+            deploy_address => 'root@192.168.87.17',
+            is_lighthouse  => "0",
+        }, {
+            domain         => "hooks.mn.greehost.com",
+            address        => "192.168.18.6",
+            deploy_address => 'root@45.33.23.91',
+            is_lighthouse  => "0",
+        }, {
+            domain         => "build01.mn.greehost.com",
+            address        => "192.168.18.11",
+            deploy_address => 'root@192.168.87.16',
+            is_lighthouse  => "0",
+        }, {
+            domain         => "static01.mn.greehost.com",
+            address        => "192.168.18.21",
+            deploy_address => 'root@176.58.120.184',
+            is_lighthouse  => "0",
+        }, {
+            domain         => "static03.mn.greehost.com",
+            address        => "192.168.18.23",
+            deploy_address => 'root@45.79.24.164',
+            is_lighthouse  => "0",
+        }, {
+            domain         => "static02.mn.greehost.com",
+            address        => "192.168.18.22",
+            deploy_address => 'root@45.79.45.149',
+            is_lighthouse  => "0",
+        }, {
+            domain         => "sslstore.mn.greehost.com",
+            address        => "192.168.18.151",
+            deploy_address => 'root@192.168.87.18',
+            is_lighthouse  => "0",
+        }
+    ],
+};
+
+# use Data::Dumper;
+# print Dumper merge_scripts( $network );
+
+open my $of, ">", 'greehost-network.json'
+    or die "Failed to open greehost-network.json file: $!";
+print $of encode_json( merge_scripts($network) );
+close $of;
+
+
+=head2 template_render( $template, $config )
+
+[% KEY %] will be replaced with the value of
+the key, as given in the argument.
+
+Simple non-nested if statements may be used.
+
+    [% IF NAME %]Hello, [% NAME %][% ENDIF %]
+    [% IF USER %]
+        Hello [% USER %],
+        Welcome to the jungle!
+    [% ENDIF %]
+
+Tokens that are not recognized will be removed,
+if statements that do not match will not leave
+behind new lines.
+
+my $content = $file->template_slurp(
+    {
+        ACCOUNT => 102044,
+        NAME    => "The Doctor",
+        BALANCE => "$105.99",
+    }
+);
+
+=cut
+
+sub template_render {
+    my ( $content, $config ) = @_;
+
+
+    my @return;
+
+    pos($content) = 0;
+    my $str;
+
+    MAIN: while ( pos($content) != length($content) ) {
+        if ( $content =~ /\G\[% IF (.*?) %\]\n?/gc ) {
+            my ( $name )  = $1;
+            if ( exists $config->{$name} ) {
+                while ( pos($content) != length( $content )) {
+                    if ( $content =~ /\G\[% ENDIF %\]/gc ) {
+                        last;
+                    } elsif ( $content =~ /\G\n\[% ENDIF %\]/gc ) {
+                        $str .= "\n";
+                        last;
+                    } elsif ( $content =~ /\G\[% (.*?) %\]/gc) {
+                        my ( $name )  = $1;
+                        if ( exists $config->{$name} ) {
+                            $str .= $config->{$name};
+                        }
+                    } elsif ( $content =~ /\G(.*?)\[%/sgc ) {
+                        pos($content) = (pos($content) - 2); # Rewind so [% matches later.
+                        my ( $token ) = ( $1 );
+                        $str .= $token;
+                    } else {
+                        parser_error( $content, pos($content), $str );
+                    }
+                }
+            } else {
+                $content =~ /\G.*?\[% ENDIF %\]\n?/sgc;
+                chomp $str if $str; # Remove the newline added by the origional failing if.
+            }
+        } elsif ( $content =~ /\G\[% (.*?) %\]/gc) {
+            my ( $name )  = $1;
+            if ( exists $config->{$name} ) {
+                $str .= $config->{$name};
+            }
+        } elsif ( $content =~ /\G(.*?)\[%/sgc ) {
+            pos($content) = (pos($content) - 2); # Rewind so [% matches later.
+            $str .= $1;
+        } elsif ( $content =~ /\G(.*?)/sgc ) {
+            $str .= $1; # Content until the end of the file.
+        } else {
+            parser_error( $content, pos($content), $str );
+        }
+    }
+    return $str;
+}
+
+sub parser_error {
+    my ( $content, $position, $str ) = @_;
+    die "Parser error:\n" .
+        "Next 10 chars to parse: " . substr( $content, $position, 10 ) . "\n" .
+        "Prev 10 chars parsed  : " . substr( $content, ($position - 10), 10 ) . "\n" .
+        "String constructed to this point: " . ( defined $str ? $str : "*NONE*" );
+}
+
+__DATA__
+===||| BEGIN remote_init |||===
+
+
+===||| BEGIN control_script |||===
+
+===||| BEGIN control_script |||===

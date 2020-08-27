@@ -74,6 +74,14 @@ my $config = verify_config(JSONY->new->load( read_text( $opts->{config} ) ));
 my $network = GreeHost::MeshNet->new_from_config($config);
 
 # Main Program
+my $DEBUG = 1;
+if ( $DEBUG ) {
+    foreach my $node ( $network->nodes ) {
+        verbose "Creating configuration for " . $node->domain;
+        use Data::Dumper;
+        print Dumper $node;
+    }
+}
 
 if ( $opts->{init} ) {
     verbose "Installing Nebula.";
