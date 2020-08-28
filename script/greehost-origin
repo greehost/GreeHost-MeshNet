@@ -10,11 +10,13 @@ my $network = {
         ssh_opts           => [ @ssh_opts ],
         post_deploy_script => [
             [ 'remote',
-                [qw(service nebula restart)],
-                [qw(service sshd restart)],
+                [qw(service nebula start)],
+                [qw(sleep 3)],
                 [qw(firewall-cmd --permanent --zone=internal --add-interface=nebula1)],
                 [qw(firewall-cmd --permanent --zone=internal --add-port=22/tcp)],
-                [qw(firewall-cmd --permanent --zone=public --remove-port=22/tcp)],
+                [qw(firewall-cmd --permanent --zone=public --add-port=4242/udp)],
+                [qw(firewall-cmd --reload)],
+                [qw(service sshd restart)],
 
             ],
         ],
