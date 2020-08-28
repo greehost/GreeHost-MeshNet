@@ -2,7 +2,6 @@
 use warnings;
 use strict;
 use Storable qw( dclone );
-use JSON::MaybeXS qw( encode_json );
 
 my @ssh_opts = ( '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null' );
 my $network = {
@@ -153,9 +152,10 @@ sub process_network_config {
 
 while ( my $opt = shift @ARGV ) {
     if ( $opt =~ /^write-config$/ ) {
+        require 'JSON::MaybeXS';
         open my $sf, ">", "greehost-network.json"
             or die "Failed to write greehost-network.json: $!";
-        print $sf encode_json( process_network_config( $network ) );
+        print $sf JSON::MaybeXS::encode_json( process_network_config( $network ) );
         close $sf;
         print "Wrote greehost-network.json\n";
     } elsif ( $opt =~ /^init-system$/ ) {
@@ -166,7 +166,7 @@ while ( my $opt = shift @ARGV ) {
         system( "yum -y install epel-release" );
         system( "yum -y update" );
         system( "yum -y upgrade" );
-        system( "yum install -y yum-utils perl-App-cpanminus perl-core rsync" );
+        system( "yum install -y yum-utils perl-App-cpanminus perl-core rsync perl-JSON-XS perl-LWP-Protocol-https" );
         system( "yum groupinstall -y \"Development Tools\"" );
         system( "mkdir -p /opt/greehost/meshnet" );
         system( "rpm -Uvh https://yum.puppetlabs.com/puppet5/puppet5-release-el-7.noarch.rpm" );
