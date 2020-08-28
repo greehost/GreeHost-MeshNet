@@ -89,6 +89,7 @@ if ( $opts->{sshconfig} ) {
     foreach my $node ( $network->nodes ) {
         printf( "Host %s\n", $node->domain );
         printf( "\tHostname %s\n", $node->address ) ;
+        printf( "\tStrictHostKeyChecking %s\n", 'no' ) ;
         print "\n";
     }
 }

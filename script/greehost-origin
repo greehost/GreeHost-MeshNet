@@ -10,9 +10,12 @@ my $network = {
         ssh_opts           => [ @ssh_opts ],
         post_deploy_script => [
             [ 'remote',
-                [qw(service firewalld stop)],
                 [qw(service nebula restart)],
                 [qw(service sshd restart)],
+                [qw(firewall-cmd --permanent --zone=internal --add-interface=nebula1)],
+                [qw(firewall-cmd --permanent --zone=internal --add-port=22/tcp)],
+                [qw(firewall-cmd --permanent --zone=public --remove-port=22/tcp)],
+
             ],
         ],
         remote_init_script => [
@@ -40,7 +43,7 @@ my $network = {
         }, {
             domain         => "manager.mn.greehost.com",
             address        => "192.168.18.4",
-            deploy_address => 'root@192.168.87.19',
+            deploy_address => 'root@192.168.87.20',
             is_lighthouse  => "0",
         }, {
             domain         => "control.mn.greehost.com",
