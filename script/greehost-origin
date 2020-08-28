@@ -177,6 +177,7 @@ while ( my $opt = shift @ARGV ) {
         system( "rpm -Uvh https://yum.puppetlabs.com/puppet5/puppet5-release-el-7.noarch.rpm" );
         system( "yum install -y puppet-agent pdk puppet-bolt" );
         system( "rm -fr /etc/puppetlabs/code/" );
+        system( 'ssh-keyscan simcop2387.info >> ~/.ssh/known_hosts' );
         system( 'git clone git@simcop2387.info:symkat/GreeHost-Puppet.git /etc/puppetlabs/code/' );
         chdir '/opt/greehost/meshnet';
         print "\nInitalized system: please go to /opt/greehost/meshnet.\n";
