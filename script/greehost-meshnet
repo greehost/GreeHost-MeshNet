@@ -44,6 +44,7 @@ sub verify_config {
 my $opts = {
     config      => 'greehost-network.json',
     init        => 0,
+    sshconfig   => 0,
     remote_init => 0,
     generate    => 0,
     deploy      => 0,
@@ -56,6 +57,7 @@ GetOptions( $opts,
     'config=s',
     'help!',
     'init!',
+    'sshconfig!',
     'remote_init!',
     'generate!',
     'deploy!',
@@ -81,6 +83,14 @@ if ( $opts->{init} ) {
     $network->install_nebula;
     verbose "Creating Nebula CA.";
     $network->install_nebula_cert_authority;
+}
+
+if ( $opts->{sshconfig} ) {
+    foreach my $node ( $network->nodes ) {
+        printf( "Host %s\n", $node->domain );
+        printf( "\tHostname %s\n", $node->address ) ;
+        print "\n";
+    }
 }
 
 if ( $opts->{generate} ) {
