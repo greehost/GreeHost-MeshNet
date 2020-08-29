@@ -13,9 +13,9 @@ my $network = {
                 [qw(service nebula start)],
                 [qw(sleep 3)],
                 [qw(firewall-cmd --permanent --zone=internal --add-interface=nebula1)],
+                [qw(firewall-cmd --zone=internal --add-interface=nebula1)],
                 [qw(firewall-cmd --permanent --zone=internal --add-port=22/tcp)],
-                [qw(firewall-cmd --permanent --zone=public --add-port=4242/udp)],
-                [qw(firewall-cmd --reload)],
+                [qw(firewall-cmd  --zone=internal --add-port=22/tcp)],
                 [qw(service sshd restart)],
 
             ],
@@ -42,6 +42,10 @@ my $network = {
             deploy_address => 'root@104.237.159.204',
             is_lighthouse  => "1",
             public_address => "104.237.159.204",
+            post_deploy_script_append => [
+                [qw(firewall-cmd --permanent --zone=public --add-port=4242/udp)],
+                [qw(firewall-cmd --zone=public --add-port=4242/udp)],
+            ],
         }, {
             domain         => "manager.mn.greehost.com",
             address        => "192.168.18.4",
@@ -57,6 +61,13 @@ my $network = {
             address        => "192.168.18.6",
             deploy_address => 'root@45.33.23.91',
             is_lighthouse  => "0",
+            post_deploy_script_append => [
+                [ 'remote',
+                    [qw(cpanm FCGI::ProcManager)],
+                    [qw(mkdir /opt/greehost/)],
+                    [qw(rsync -a root@192.168.18.151:/opt/greehost/sslstore/ /opt/greehost/sslstore/)],
+                ],
+            ],
         }, {
             domain         => "build01.mn.greehost.com",
             address        => "192.168.18.11",
@@ -82,6 +93,13 @@ my $network = {
             address        => "192.168.18.151",
             deploy_address => 'root@192.168.87.18',
             is_lighthouse  => "0",
+            post_deploy_script_append => [
+                [ 'remote',
+                    [qw(yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo)],
+                    [qw(yum install -y docker-ce docker-compose)],
+                    [qw(systemctl start docker; systemctl enable docker)],
+                ],
+            ],
         }
     ],
 };
@@ -114,7 +132,12 @@ sub process_network_config {
         if ( ! $node->{remote_init_script} ) {
             # [ [ 'marker', @cmds ], [ 'marker', @cmds  ] ]
             my $network_scripts = dclone $network->{config}{remote_init_script};
-            my @scripts = @{$network_scripts};
+                    post_deploy_script_append 
+            my @scripts = (  
+                @{$node->{pre_deploy_script_append} || []},
+                @{$network_scripts}, 
+                @{$node->{post_deploy_script_append} || []}
+            );
             foreach my $script ( @scripts ) {
                 my $mode = shift @{$script};
                 my @new_cmd;
