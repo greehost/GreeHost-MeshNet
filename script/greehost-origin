@@ -49,12 +49,7 @@ my $network = {
         }, {
             domain         => "manager.mn.greehost.com",
             address        => "192.168.18.4",
-            deploy_address => 'root@192.168.87.20',
-            is_lighthouse  => "0",
-        }, {
-            domain         => "control.mn.greehost.com",
-            address        => "192.168.18.5",
-            deploy_address => 'root@192.168.87.17',
+            deploy_address => 'root@192.168.87.22',
             is_lighthouse  => "0",
         }, {
             domain         => "hooks.mn.greehost.com",
@@ -71,7 +66,7 @@ my $network = {
         }, {
             domain         => "build01.mn.greehost.com",
             address        => "192.168.18.11",
-            deploy_address => 'root@192.168.87.16',
+            deploy_address => 'root@192.168.87.23',
             is_lighthouse  => "0",
         }, {
             domain         => "static01.mn.greehost.com",
@@ -79,19 +74,19 @@ my $network = {
             deploy_address => 'root@176.58.120.184',
             is_lighthouse  => "0",
         }, {
-            domain         => "static03.mn.greehost.com",
-            address        => "192.168.18.23",
-            deploy_address => 'root@45.79.24.164',
-            is_lighthouse  => "0",
-        }, {
             domain         => "static02.mn.greehost.com",
             address        => "192.168.18.22",
             deploy_address => 'root@45.79.45.149',
             is_lighthouse  => "0",
         }, {
+            domain         => "static03.mn.greehost.com",
+            address        => "192.168.18.23",
+            deploy_address => 'root@45.79.24.164',
+            is_lighthouse  => "0",
+        }, {
             domain         => "sslstore.mn.greehost.com",
             address        => "192.168.18.151",
-            deploy_address => 'root@192.168.87.18',
+            deploy_address => 'root@192.168.87.24',
             is_lighthouse  => "0",
             post_deploy_script_append => [
                 [ 'remote',
