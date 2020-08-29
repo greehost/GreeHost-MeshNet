@@ -1,0 +1,23 @@
+#!/usr/bin/env perl
+use warnings;
+use strict;
+use File::Find;
+use File::Copy;
+
+mkdir 'meshnetstore';
+copy( 'certs/ca.crt', 'meshnetstore/ca.crt' );
+
+find( sub {
+    if ( $_ =~ /^(.+)\.conf$/ ) {
+        my $domain = $1;
+        die "Error: Looked at $domain, but didn't find all files."
+            unless ( -e "$domain.crt" && -e "$domain.key" );
+        mkdir "../meshnetstore/$domain";
+        copy "$domain.crt",  "../meshnetstore/$domain/$domain.crt";
+        copy "$domain.key",  "../meshnetstore/$domain/$domain.key";
+        copy "$domain.conf", "../meshnetstore/$domain/$domain.cfg";
+        copy "$domain.conf", "../meshnetstore/$domain/$domain.conf";
+        print "Included $domain in meshnetstore\n";
+    }
+
+}, qw( certs ));
