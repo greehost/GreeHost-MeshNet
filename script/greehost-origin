@@ -43,8 +43,10 @@ my $network = {
             is_lighthouse  => "1",
             public_address => "104.237.159.204",
             post_deploy_script_append => [
-                [qw(firewall-cmd --permanent --zone=public --add-port=4242/udp)],
-                [qw(firewall-cmd --zone=public --add-port=4242/udp)],
+                [ 'remote',
+                    [qw(firewall-cmd --permanent --zone=public --add-port=4242/udp)],
+                    [qw(firewall-cmd --zone=public --add-port=4242/udp)],
+                ],
             ],
         }, {
             domain         => "manager.mn.greehost.com",
