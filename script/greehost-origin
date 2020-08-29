@@ -127,7 +127,6 @@ sub process_network_config {
         if ( ! $node->{remote_init_script} ) {
             # [ [ 'marker', @cmds ], [ 'marker', @cmds  ] ]
             my $network_scripts = dclone $network->{config}{remote_init_script};
-                    post_deploy_script_append 
             my @scripts = (  
                 @{$node->{pre_deploy_script_append} || []},
                 @{$network_scripts}, 
