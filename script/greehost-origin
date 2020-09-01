@@ -62,6 +62,9 @@ my $network = {
                 [ 'remote',
                     [qw(cpanm FCGI::ProcManager)],
                     [qw(mkdir /opt/greehost/)],
+                    # Note this doesn't work because ssh key forwarding isn't enabled in the main thing...
+                    # also TODO use dns for static store, also allow the things to be configured somewhere
+                    # so other network names don't break things, this all needs to be hostname agnostic.
                     [qw(rsync -a root@192.168.18.151:/opt/greehost/sslstore/ /opt/greehost/sslstore/)],
                 ],
             ],
